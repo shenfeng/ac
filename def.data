@@ -1,0 +1,12 @@
+struct IndexItem {
+       1: string index,
+       2: list<byte> offs,
+       // check for substring match. when empty: check = AcItem.show
+       3: string check
+}
+
+struct AcItem {
+       1: string show,
+       2: double score, // ranking score
+       3: list<IndexItem> indexes,
+}
