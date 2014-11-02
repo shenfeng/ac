@@ -65,9 +65,7 @@ func NewReader(file string) (*ItemReader, error) {
 }
 
 func (r *ItemReader) Reset() { r.off = 0 }
-func (r *ItemReader) Close() {
-	syscall.Munmap(r.buf)
-}
+func (r *ItemReader) Close() { syscall.Munmap(r.buf) }
 
 func (r *ItemReader) Next() (AcItem, bool) {
 	buf := r.buf[r.off:]

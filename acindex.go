@@ -7,14 +7,16 @@ import (
 )
 
 const (
-	Discount = 0.95
+	Discount    = 0.95
+	DeletedItem = -1.0
+	HUGE_RESULT = 50 * 1000
 )
 
 type AcIndexItem struct {
 	index uint32
 	data  uint32
 	show  uint32
-	score float32
+	score float32 //  deleted if score is < 0
 }
 
 type AcIndex struct {
@@ -29,7 +31,7 @@ type Item struct {
 }
 
 type AcResult struct {
-	hit   int
+	hits  int
 	items []Item
 }
 
@@ -41,6 +43,26 @@ func (a ByAlpha) Less(i, j int) bool {
 }
 func (a ByAlpha) Swap(i, j int) {
 	a.indexes[i], a.indexes[j] = a.indexes[j], a.indexes[i]
+}
+
+// abc|def\0 => abc
+func getData(bs []byte) []byte {
+	for i, b := range bs {
+		if b == '|' || b == 0 {
+			return bs[:i]
+		}
+	}
+	return bs
+}
+
+func oneGreater(d []byte) []byte {
+	for i := len(d) - 1; i >= 0; i-- {
+		if d[i] != 255 {
+			d[i] += 1
+			break
+		}
+	}
+	return d
 }
 
 func NewAcIndex(path string) (*AcIndex, error) {
@@ -55,10 +77,7 @@ func NewAcIndex(path string) (*AcIndex, error) {
 		if f { // finished
 			break
 		}
-
 		ram += len(ai.Show) + 1
-		// items += 1
-		// println("--------------", len(ai.Indexes))
 		for _, it := range ai.Indexes {
 			ram += len(it.Index) + 1
 			items += 1 + len(it.Offs)
@@ -73,10 +92,7 @@ func NewAcIndex(path string) (*AcIndex, error) {
 		indexes: make([]AcIndexItem, 0, items),
 	}
 
-	// log.Println(ram, items, "--------------before--------------")
-
 	ir.Reset()
-
 	for {
 		ai, f := ir.Next()
 		if f {
@@ -84,14 +100,11 @@ func NewAcIndex(path string) (*AcIndex, error) {
 		}
 
 		didx := index.append(ai.Show)
-		// println(didx, string(index.data[didx:]), string(ai.Show))
-
 		for _, it := range ai.Indexes {
 			iidx := index.append(it.Index)
 			sidx := didx
 			if len(it.Check) > 0 {
 				sidx = index.append(it.Check)
-				// println("---------------------------------")
 			}
 			score := float32(ai.Score)
 			index.appendIdx(iidx, didx, sidx, score)
@@ -103,7 +116,6 @@ func NewAcIndex(path string) (*AcIndex, error) {
 	}
 
 	sort.Sort(ByAlpha(*index))
-	// log.Println(len(index.data), len(index.indexes), "-----------after-----------")
 
 	return index, nil
 }
@@ -111,8 +123,7 @@ func NewAcIndex(path string) (*AcIndex, error) {
 func (ai *AcIndex) append(d []byte) int {
 	idx := len(ai.data)
 	ai.data = append(ai.data, d...)
-	ai.data = append(ai.data, '|')
-	// ai.data = append(ai.data, 8)
+	ai.data = append(ai.data, 0)
 
 	return idx
 }
@@ -127,8 +138,6 @@ func (ai *AcIndex) appendIdx(idx, data, show int, score float32) {
 }
 
 func (ai *AcIndex) lowerBound(q []byte) int {
-	// log.Println(*ai)
-	// return 1
 	i, j := 0, len(ai.indexes)
 	for i < j {
 		h := i + (j-i)/2 // avoid overflow when computing h
@@ -140,30 +149,78 @@ func (ai *AcIndex) lowerBound(q []byte) int {
 			j = h
 		}
 	}
-	// i == j, f(i-1) == false, and f(j) (= f(i)) == true  =>  answer is i.
 	return i
 }
 
-func one_greater(d []byte) []byte {
-	for i := len(d) - 1; i >= 0; i-- {
-		if d[i] != 255 {
-			d[i] += 1
+func (ai *AcIndex) Search(q string, limit, offset int) AcResult {
+	bs := []byte(q)
+	lower := ai.lowerBound(bs)
+	up := ai.lowerBound(oneGreater(bs))
+
+	re := AcResult{items: make([]Item, 0, limit)}
+	if lower == up {
+		return re
+	}
+
+	totalHits := 0
+	fast := up-lower > HUGE_RESULT
+	howMany := limit + offset
+	var ss *DenseStrHashSet
+	if fast { // fast but not accurate
+		howMany += 200
+	} else { // accurate: including hits count is accurate
+		ss = NewStrHashSet(up - lower)
+	}
+	pq := NewHitQueue(howMany)
+
+	for i := lower; i < up; i++ {
+		item := ai.indexes[i]
+
+		if fast && !pq.NeedUpdate(item.score) {
+			continue
+		}
+
+		if !fast && !ss.Insert(getData(ai.data[item.data:])) {
+			continue
+		}
+		totalHits += 1
+		pq.UpdateTop(item)
+	}
+
+	l := howMany
+	if totalHits < l {
+		l = totalHits
+	}
+
+	// First, pop all the sentinel elements (there are pq.size() - totalHits).
+	for i := howMany - totalHits; i > 0; i-- {
+		pq.Pop()
+	}
+
+	tmp := make([]AcIndexItem, l)
+	for i := l - 1; i >= 0; i-- {
+		tmp[i] = pq.Pop()
+	}
+
+	skip := 0
+	unique := NewStrHashSet(l)
+	for i := 0; i < l; i++ {
+		d := getData(ai.data[tmp[i].data:])
+		if !unique.Insert(d) {
+			continue
+		}
+		skip += 1
+		if offset >= skip {
+			continue
+		}
+
+		re.items = append(re.items, Item{data: string(d), score: tmp[i].score})
+		if len(re.items) >= limit {
 			break
 		}
 	}
-	return d
-}
-
-func (ai *AcIndex) Search(q string, limit, off int) AcResult {
-	bs := []byte(q)
-	lower := ai.lowerBound(bs)
-	up := ai.lowerBound(one_greater(bs))
-
-	for _, d := range ai.indexes[lower:up] {
-		log.Println(d, string(ai.data[d.data:]))
-	}
-
-	return AcResult{}
+	re.hits = totalHits
+	return re
 }
 
 func main() {
@@ -175,5 +232,5 @@ func main() {
 		log.Fatal(err)
 	}
 
-	ir.Search("网", 10, 0)
+	log.Println(ir.Search("网", 10, 0))
 }

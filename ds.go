@@ -1,8 +1,6 @@
 package main
 
-import (
-	"bytes"
-)
+import "bytes"
 
 type DenseIntHashSet struct {
 	table []uint32
@@ -96,12 +94,14 @@ func (q *HitQueue) Top() AcIndexItem {
 	return q.heap[1]
 }
 
+func (q *HitQueue) NeedUpdate(s float32) bool { return q.heap[1].score < s }
+
 func (q *HitQueue) UpdateTop(a AcIndexItem) {
 	if q.heap[1].score < a.score {
 		q.heap[1] = a
-		//        log.Println("before", a, q.heap)
+		//		log.Println("before", a, "--------", q.heap)
 		q.downHeap()
-		//        log.Println("after ", a, q.heap)
+		//		log.Println("after ", a, "------", q.heap)
 	}
 }
 

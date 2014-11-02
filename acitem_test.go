@@ -46,6 +46,6 @@ func TestSearchIndex(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	ir.Search("网", 10, 0)
-
+	re := ir.Search("网", 10, 0)
+	log.Println(re)
 }
