@@ -7,14 +7,15 @@ import struct
 class AcItem(object):
     # all input are unicode
     def __init__(self, show, score):
+        # self.show = show.encode('utf8')
         self.show = show
         self.score = score
         self.indexes = []
 
     # index: ['看准', '看准网']
     def add_index(self, index, check=u''):
-        if self.show == check:
-            check = ''
+        # if self.show == check:
+        # check = ''
 
         self.indexes.append((index, check.encode('utf8')))
 
@@ -37,6 +38,9 @@ class AcItem(object):
 
         return buf
 
+    def __str__(self):
+        return repr(self.__dict__).decode('raw_unicode_escape').encode('utf8')
+
 
 def run_test():
     with open('/tmp/ac_item_tmp', 'w') as f:
@@ -55,5 +59,7 @@ def run_test():
 
 
 if __name__ == '__main__':
-    run_test()
+    pass
+    # dump_pinyins()
+    # run_test()
 

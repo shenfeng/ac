@@ -1,9 +1,16 @@
-package main
+package ac
 
 import (
 	"bytes"
+	"encoding/json"
+	"io/ioutil"
 	"log"
+	"net/http"
+	"os"
+	"path"
 	"sort"
+	"strconv"
+	"unicode/utf8"
 )
 
 const (
@@ -23,16 +30,17 @@ type AcIndex struct {
 	data    []byte
 	indexes []AcIndexItem
 	Name    string
+	pinyin  Pinyins
 }
 
 type Item struct {
-	data  string
-	score float32
+	Data  string  `json:"data"`
+	Score float32 `json:"score"`
 }
 
 type AcResult struct {
-	hits  int
-	items []Item
+	Hits  int    `json:"hits"`
+	Items []Item `json:"items"`
 }
 
 type ByAlpha AcIndex
@@ -65,8 +73,8 @@ func oneGreater(d []byte) []byte {
 	return d
 }
 
-func NewAcIndex(path string) (*AcIndex, error) {
-	ir, err := NewReader(path)
+func NewAcIndex(file string) (*AcIndex, error) {
+	ir, err := NewReader(file)
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +98,11 @@ func NewAcIndex(path string) (*AcIndex, error) {
 	index := &AcIndex{ // reserve memory
 		data:    make([]byte, 0, ram),
 		indexes: make([]AcIndexItem, 0, items),
+		Name:    path.Base(file),
+	}
+
+	if ram > 1024*1024 {
+		log.Printf("%s items %d, ram %.2fM\n", index.Name, items, float64((items*16+ram))/1024.0/1024.0)
 	}
 
 	ir.Reset()
@@ -114,9 +127,7 @@ func NewAcIndex(path string) (*AcIndex, error) {
 			}
 		}
 	}
-
 	sort.Sort(ByAlpha(*index))
-
 	return index, nil
 }
 
@@ -152,12 +163,107 @@ func (ai *AcIndex) lowerBound(q []byte) int {
 	return i
 }
 
-func (ai *AcIndex) Search(q string, limit, offset int) AcResult {
-	bs := []byte(q)
-	lower := ai.lowerBound(bs)
-	up := ai.lowerBound(oneGreater(bs))
+func (ai *AcIndex) queryRewrite(q string) (query []byte, key []byte, check bool) {
+	query = []byte(q)
+	key = query
+	check = true
+	if ai.pinyin != nil {
+		key = make([]byte, 0, len(query)*2)
+		t := query
+		for len(t) > 0 {
+			r, size := utf8.DecodeRune(t)
+			if py, ok := ai.pinyin[r]; ok {
+				key = append(key, py...)
+			} else {
+				check = false // do not check
+				key = append(key, t[:size]...)
+			}
+			t = t[size:]
+		}
+	} else {
+		key = query
+		check = false
+	}
+	return
+}
 
-	re := AcResult{items: make([]Item, 0, limit)}
+type Indexes map[string]*AcIndex
+
+func LoadIndexes(dir string, pinyins Pinyins) (Indexes, error) {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	r := make(Indexes, len(files))
+	ch := make(chan *AcIndex, len(files))
+	cnt := 0
+	for _, f := range files {
+		if f.Name()[0] == '.' {
+			continue
+		}
+		cnt += 1
+		go (func(f os.FileInfo) {
+			idx, err := NewAcIndex(path.Join(dir, f.Name()))
+			if err == nil {
+				idx.pinyin = pinyins
+				ch <- idx
+			} else {
+				log.Println("ERROR", f, err)
+			}
+		})(f)
+	}
+
+	for i := 0; i < cnt; i++ {
+		idx := <-ch
+		r[idx.Name] = idx
+	}
+	return r, nil
+}
+
+func (i Indexes) Search(kind string, q string, limit, offset int) AcResult {
+	if ai, ok := i[kind]; ok {
+		return ai.Search(q, limit, offset)
+	} else {
+		return AcResult{}
+	}
+}
+
+func uint(s string, d int) int {
+	if i, e := strconv.Atoi(s); e == nil && i > 0 {
+		return i
+	} else {
+		return d
+	}
+}
+
+func (idx Indexes) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	switch r.URL.Path {
+	case "/ac":
+		if e := r.ParseForm(); e == nil {
+			kind, q, limit, off := r.Form.Get("kind"), r.Form.Get("q"), r.Form.Get("limit"), r.Form.Get("offset")
+			if kind != "" && q != "" {
+				r := idx.Search(kind, q, uint(limit, 10), uint(off, 0))
+				json, err := json.Marshal(r)
+				if err == nil {
+					w.Header().Add("Content-Type", "application/json")
+					w.Write([]byte(json))
+				} else {
+					w.Write([]byte(err.Error()))
+				}
+			}
+		}
+	}
+}
+
+func (ai *AcIndex) Search(q string, limit, offset int) AcResult {
+	query, key, check := ai.queryRewrite(q)
+
+	//	log.Println([]byte(query), []byte(key), check)
+
+	lower := ai.lowerBound(key)
+	up := ai.lowerBound(oneGreater(key))
+
+	re := AcResult{Items: make([]Item, 0, limit)}
 	if lower == up {
 		return re
 	}
@@ -165,23 +271,28 @@ func (ai *AcIndex) Search(q string, limit, offset int) AcResult {
 	totalHits := 0
 	fast := up-lower > HUGE_RESULT
 	howMany := limit + offset
-	var ss *DenseStrHashSet
-	if fast { // fast but not accurate
-		howMany += 200
-	} else { // accurate: including hits count is accurate
+	var ss *StrHashSet
+	if fast { // fast, not accurate hits count
+		howMany = howMany*2 + 100
+	} else { // hits count is accurate
 		ss = NewStrHashSet(up - lower)
 	}
 	pq := NewHitQueue(howMany)
 
 	for i := lower; i < up; i++ {
 		item := ai.indexes[i]
-
 		if fast && !pq.NeedUpdate(item.score) {
 			continue
 		}
 
-		if !fast && !ss.Insert(getData(ai.data[item.data:])) {
-			continue
+		if !fast {
+			d := getData(ai.data[item.data:])
+			if !ss.Insert(d) { // duplicate
+				continue
+			}
+			if check && !bytes.Contains(d, query) { // accurate hits count
+				continue
+			}
 		}
 		totalHits += 1
 		pq.UpdateTop(item)
@@ -206,7 +317,7 @@ func (ai *AcIndex) Search(q string, limit, offset int) AcResult {
 	unique := NewStrHashSet(l)
 	for i := 0; i < l; i++ {
 		d := getData(ai.data[tmp[i].data:])
-		if !unique.Insert(d) {
+		if !unique.Insert(d) || (check && !bytes.Contains(d, query)) {
 			continue
 		}
 		skip += 1
@@ -214,23 +325,11 @@ func (ai *AcIndex) Search(q string, limit, offset int) AcResult {
 			continue
 		}
 
-		re.items = append(re.items, Item{data: string(d), score: tmp[i].score})
-		if len(re.items) >= limit {
+		re.Items = append(re.Items, Item{Data: string(d), Score: tmp[i].score})
+		if len(re.Items) >= limit {
 			break
 		}
 	}
-	re.hits = totalHits
+	re.Hits = totalHits
 	return re
-}
-
-func main() {
-	const (
-		TESTFILE = "/tmp/ac_item_tmp"
-	)
-	ir, err := NewAcIndex(TESTFILE)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Println(ir.Search("网", 10, 0))
 }

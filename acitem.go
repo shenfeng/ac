@@ -1,9 +1,11 @@
-package main
+package ac
 
 import (
 	"encoding/binary"
 	// "log"
+	"bufio"
 	"os"
+	"strings"
 	"syscall"
 )
 
@@ -35,7 +37,7 @@ func readIndex(buf []byte) (IndexItem, int) {
 }
 
 type ItemReader struct {
-	cache []IndexItem
+	cache []IndexItem // reuse, avoid allocation
 	buf   []byte
 	off   int
 }
@@ -99,4 +101,21 @@ func (r *ItemReader) Next() (AcItem, bool) {
 	r.off += l
 
 	return ai, false
+}
+
+type Pinyins map[rune][]byte
+
+func LoadPinyins(file string) (Pinyins, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	m := make(Pinyins, 30000)
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		parts := strings.Split(strings.Trim(s.Text(), "\n"), "\t")
+		//		r, _ := utf8.DecodeRune([]byte(parts[0]))
+		m[[]rune(parts[0])[0]] = []byte(parts[1])
+	}
+	return m, nil
 }

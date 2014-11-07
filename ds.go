@@ -1,4 +1,4 @@
-package main
+package ac
 
 import "bytes"
 
@@ -19,11 +19,11 @@ func normCapacity(v int) int {
 	return v
 }
 
-func NewIntHashSet(v int) *DenseIntHashSet {
-	v = normCapacity(v)
+func NewIntHashSet(maxSize int) *DenseIntHashSet {
+	maxSize = normCapacity(maxSize)
 	return &DenseIntHashSet{
 		// buckets_minus_one: v,
-		table: make([]uint32, v),
+		table: make([]uint32, maxSize),
 	}
 }
 
@@ -46,19 +46,19 @@ func (h *DenseIntHashSet) Insert(v uint32) bool {
 	}
 }
 
-type DenseStrHashSet struct {
+type StrHashSet struct {
 	table [][]byte
 	//    size int
 }
 
-func NewStrHashSet(v int) *DenseStrHashSet {
-	v = normCapacity(v)
-	return &DenseStrHashSet{
-		table: make([][]byte, v),
+func NewStrHashSet(maxSize int) *StrHashSet {
+	maxSize = normCapacity(maxSize)
+	return &StrHashSet{
+		table: make([][]byte, maxSize),
 	}
 }
 
-func (h *DenseStrHashSet) Insert(v []byte) bool {
+func (h *StrHashSet) Insert(v []byte) bool {
 	buckets_minus_one, num_probes := uint32(len(h.table)-1), uint32(0)
 	hash := uint32(5381)
 	for _, b := range v {
@@ -90,18 +90,10 @@ func NewHitQueue(size int) *HitQueue {
 	return &HitQueue{heap: h, size: size}
 }
 
-func (q *HitQueue) Top() AcIndexItem {
-	return q.heap[1]
-}
-
-func (q *HitQueue) NeedUpdate(s float32) bool { return q.heap[1].score < s }
-
 func (q *HitQueue) UpdateTop(a AcIndexItem) {
 	if q.heap[1].score < a.score {
 		q.heap[1] = a
-		//		log.Println("before", a, "--------", q.heap)
 		q.downHeap()
-		//		log.Println("after ", a, "------", q.heap)
 	}
 }
 
@@ -111,7 +103,6 @@ func (q *HitQueue) downHeap() {
 
 	for left <= q.size {
 		swap := root
-		//            log.Println("------------", left, swap)
 		if q.lessThan(left, swap) {
 			swap = left
 		}
@@ -136,7 +127,9 @@ func (q *HitQueue) lessThan(i, j int) bool {
 	return q.heap[i].score < q.heap[j].score
 }
 
-func (q *HitQueue) Empty() bool { return q.size == 0 }
+func (q *HitQueue) Empty() bool               { return q.size == 0 }
+func (q *HitQueue) NeedUpdate(s float32) bool { return q.heap[1].score < s }
+func (q *HitQueue) Top() AcIndexItem          { return q.heap[1] }
 
 func (q *HitQueue) Pop() AcIndexItem {
 	if q.size > 0 {

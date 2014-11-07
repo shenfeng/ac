@@ -1,4 +1,4 @@
-package main
+package ac
 
 import (
 	// "log"
@@ -12,9 +12,6 @@ func TestHitQueue(t *testing.T) {
 		ai := AcIndexItem{score: float32(i)}
 		q.UpdateTop(ai)
 	}
-
-	//    log.Println(q.heap)
-
 	for !q.Empty() {
 		a := q.Pop()
 		_ = a
@@ -79,5 +76,4 @@ func BenchmarkStrHashSet(b *testing.B) {
 		d[idx] = byte((int(d[idx]) + 1) % 255)
 		s.Insert(d)
 	}
-	//    log.Println(s.size)
 }
