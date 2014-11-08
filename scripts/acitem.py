@@ -1,40 +1,45 @@
 # encoding: utf8
-__author__ = 'feng'
-
 import struct
+
+__author__ = 'feng'
 
 
 class AcItem(object):
     # all input are unicode
-    def __init__(self, show, score):
-        # self.show = show.encode('utf8')
+    def __init__(self, show):
         self.show = show
-        self.score = score
         self.indexes = []
 
     # index: ['看准', '看准网']
-    def add_index(self, index, check=u''):
-        # if self.show == check:
-        # check = ''
-
-        self.indexes.append((index, check.encode('utf8')))
+    def add_index(self, index, score, check=u''):
+        self.indexes.append((index, score, check))
 
     def to_bytes(self):
         # little endian, unsigned int
         show = self.show.encode('utf8')
-        buf = chr(len(show)) + show + struct.pack('<I', self.score) + chr(len(self.indexes))
 
-        for index, check in self.indexes:
+        # struct.pack('<I', self.score)
+
+        buf = chr(len(show)) + show + chr(len(self.indexes))
+
+        for index, score, check in self.indexes:
             index = [i.encode('utf8') for i in index]
             # print index
             offs, acc = [], 0
             for i in index[:-1]:
-                acc += len(i)  # ignore 0, since it's the default
+                acc += len(i)  # ignore 0, since it's the default. ignore last
                 offs.append(acc)
 
+            # print offs
             offs = bytearray(offs)
             index = ''.join(index)
-            buf += '%c%s%c%s%c%s' % (chr(len(index)), index, chr(len(offs)), offs, chr(len(check)), check)
+            # index+score+offs+check
+            buf += chr(len(index)) + index + struct.pack('<I', score)
+
+            check = check.encode('utf8')
+            buf += chr(len(offs)) + offs + chr(len(check)) + check
+
+            # buf += '%c%s%c%s%c%s' % (chr(len(index)), index, chr(len(offs)), offs, chr(len(check)), check)
 
         return buf
 
@@ -62,4 +67,3 @@ if __name__ == '__main__':
     pass
     # dump_pinyins()
     # run_test()
-

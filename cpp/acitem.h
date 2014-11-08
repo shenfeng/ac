@@ -9,30 +9,53 @@
 #include <sys/mman.h>       //  mmap
 #include <fcntl.h>          // open
 
+#include <assert.h>    // assert
+#include <string.h> // memcpy
+
 #include <vector>
 #include <string>
 
 class Buffer {
-    unsigned char *p;
+    char *p;
     int end;
     int off;
 public:
-    Buffer(unsigned char *p, int off, int len) : p(p), off(off), end(len + off) {
+    Buffer(char *p, int off, int len) : p(p), off(off), end(len + off) {
     }
 
     Buffer() {
     }
 
     char Char() {
+        assert(end - off >= 1);
         return p[off++];
     }
 
-    unsigned char *Get(int off) {
+    int Copy(Buffer b) {
+        assert(end - off >= b.Len() + 1);
+        int o = this->off;
+        memcpy(this->Get(), b.Get(), b.Len());
+        this->off += b.Len();
+        this->p[this->off++] = '\0';
+        return o;
+    }
+
+    char *Get(int off) {
+        assert(end > off);
         return p + off;
     }
 
+    char *Get() {
+        return p + off;
+    }
+
+    int End() {
+        return this->end;
+    }
+
     char operator[](int i) {
-        return p[off + 1];
+        assert(end - off >= 1);
+        return p[off + i];
     }
 
     int Len() {
@@ -44,12 +67,14 @@ public:
     }
 
     int Int() {
+        assert(end - off >= 4);
         int n = *(int *) (p + off);
         off += 4;
         return n;
     }
 
     Buffer Next(int n) {
+        assert(end - off >= n);
         int b = off;
         off += n;
         return Buffer(p, b, n);
@@ -62,25 +87,21 @@ public:
 
 struct IndexItem {
     Buffer index;
+    int score;
     Buffer offs;
     Buffer check;
-
 };
 
 struct AcItem {
     Buffer show;
-    int score;
-    std::vector<IndexItem> *indexes;
+    std::vector<IndexItem> indexes;
 };
 
 class ItemReader {
 private:
     size_t size;
-    unsigned char *p;
+    char *p;
     Buffer buffer;
-
-    std::vector<IndexItem> cache;
-
 public:
     int Open(std::string path) {
         int fd = open(path.c_str(), O_RDONLY);
@@ -96,30 +117,30 @@ public:
             return rc;
         }
         this->size = stat_buf.st_size;
-        this->p = (unsigned char *) mmap(NULL, this->size, PROT_READ, MAP_PRIVATE, fd, 0);
+        this->p = (char *) mmap(NULL, this->size, PROT_READ, MAP_PRIVATE, fd, 0);
         if (this->p == MAP_FAILED) {
             perror(path.c_str());
             return -1;
         }
 
         this->buffer = Buffer(this->p, 0, this->size);
+        return 1;
     }
 
     AcItem Next() {
         AcItem ai;
         ai.show = this->buffer.PrefixRead();
-        ai.score = this->buffer.Int();
-        this->cache.empty();
 
         int l = this->buffer.Char();
         for (int i = 0; i < l; i++) {
             IndexItem it;
             it.index = this->buffer.PrefixRead();
+            it.score = this->buffer.Int();
             it.offs = this->buffer.PrefixRead();
             it.check = this->buffer.PrefixRead();
-            this->cache.push_back(it);
+            ai.indexes.push_back(it);
         }
-        ai.indexes = &this->cache;
+
         return ai;
     }
 

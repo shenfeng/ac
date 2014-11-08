@@ -41,30 +41,6 @@ public:
     }
 };
 
-
-class Int {
-    int i;
-public:
-    Int(unsigned int i) : i(i) {
-    }
-
-    Int() : i(0) {
-    }
-
-    unsigned int hash_code() const {
-        return i;
-    }
-
-    bool is_unset() const {
-        return i == 0;
-    }
-
-    bool equals(const Int &o) const {
-        return i == o.i;
-    }
-};
-
-
 #define JUMP_(key, num_probes)    ( num_probes )
 //#define JUMP_(key, num_probes)    ( 1 )
 
@@ -116,18 +92,18 @@ public:
         size_type num_probes = 0;
         size_type bucknum = value.hash_code() & bucket_count_minus_one;
 
-        // give compiler a chance to unroll the loop
-        for (int i = 0; i < 3; ++i) {
-            const item_t &item = _table[bucknum];
-            if (item.is_unset()) {
-                _table[bucknum] = value;
-                return true;
-            } else if (value.equals(item)) {
-                return false;
-            }
-            ++num_probes;
-            bucknum = (bucknum + JUMP_(key, num_probes)) & bucket_count_minus_one;
-        }
+        // // give compiler a chance to unroll the loop
+        // for (int i = 0; i < 3; ++i) {
+        //     const item_t &item = _table[bucknum];
+        //     if (item.is_unset()) {
+        //         _table[bucknum] = value;
+        //         return true;
+        //     } else if (value.equals(item)) {
+        //         return false;
+        //     }
+        //     ++num_probes;
+        //     bucknum = (bucknum + JUMP_(key, num_probes)) & bucket_count_minus_one;
+        // }
 
         while (1) {
             const item_t &item = _table[bucknum];
