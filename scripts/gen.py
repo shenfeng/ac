@@ -18,7 +18,11 @@ def dump_pinyins():
             # print k, v, unichr(int(k, 16))
             try:
                 m[unichr(int(k, 16))] = v
-                f.write('%s\t%s\n' % (unichr(int(k, 16)).encode('utf8'), v.encode('utf8')))
+                k = unichr(int(k, 16)).encode('utf8')
+                if 1 < len(k) <= 3:
+                    f.write('%s\t%s\n' % (k, v.encode('utf8')))
+                else:
+                    print k, len(k)
             except Exception as e:
                 pass
 

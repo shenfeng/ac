@@ -14,6 +14,9 @@
 
 #include <vector>
 #include <string>
+#include <unordered_map>
+#include <fstream>
+#include "utf8/checked.h"
 
 class Buffer {
     char *p;
@@ -154,6 +157,46 @@ public:
 
     void Reset() {
         this->buffer = Buffer(this->p, 0, this->size);
+    }
+};
+
+// #include "iostream"
+
+struct Pinyins {
+    std::unordered_map<uint32_t, std::string> pinyins;
+
+public:
+    int Open(std::string path) {
+        std::ifstream infile(path);
+        if (!infile.is_open()) {
+            return -1;
+        }
+        std::string line;
+        // one item per line, seperate by \t
+        while (std::getline(infile, line)) {
+            const char *p = line.data();
+            auto v = utf8::next(p, line.data() + line.size());
+            if (p - line.data() > 1) {
+                auto pos = line.find('\t');
+                if (pos != line.npos) {
+                    this->pinyins[v] = line.substr(pos + 1);
+                }
+            }
+        }
+        infile.close();
+        return 1;
+    }
+
+    const std::pair<const char *, int> Get(const char *in) const {
+        auto p = in;
+        auto v = utf8::next(p, p + 4);
+        auto it = pinyins.find(v);
+        int size = p - in;
+        if (it != pinyins.end()) {
+            return std::make_pair(it->second.data(), size);
+        } else {
+            return std::make_pair((char *) NULL, size);
+        }
     }
 };
 

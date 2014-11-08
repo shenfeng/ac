@@ -1,3 +1,6 @@
+#ifndef _HIT_QUEUE_H_
+#define _HIT_QUEUE_H_
+
 template<class T>
 class hit_queue { // a min heap
 public:
@@ -18,7 +21,6 @@ public:
         int root = 1;
         int left = root * 2;
         int right = left + 1;
-
         for (; left <= this->size;) {
             int swap = root;
             if (this->heap[left] < this->heap[swap]) {
@@ -50,7 +52,6 @@ public:
         T t = heap[1];
         heap[1] = heap[size];
         this->size -= 1;
-//        printf("%d-----------%d\n", this->size, t.data);
         this->downHeap();
         return t;
     }
@@ -77,3 +78,5 @@ private:
     // Copy Assignment Operator
     hit_queue &operator=(const hit_queue &other) = delete;
 };
+
+#endif /* _HIT_QUEUE_H_ */

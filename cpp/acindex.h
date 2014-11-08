@@ -16,6 +16,9 @@ struct AcIndexItem {
     int show;
     float score;
 public:
+    AcIndexItem() : index(0), data(0), show(0), score(0) {
+    }
+
     bool operator<(const AcIndexItem &rhs) const {
         return this->score < rhs.score;
     }
@@ -91,7 +94,11 @@ class AcIndex {
     std::string name;
     Buffer data;
     std::vector<AcIndexItem> indexes;
+    const Pinyins &pinyins;
 public:
+    AcIndex(const Pinyins &pinyins) : pinyins(pinyins) {
+    }
+
     int Open(std::string path) {
         ItemReader ir;
         int n = ir.Open(path);
@@ -141,7 +148,7 @@ public:
                 for (int i = 0; i < it->offs.Len(); i++) {
                     ii.score *= 0.95;
                     ii.index = idx + it->offs[i];
-//                    printf("--------------%d %d %d\n", ii.index, it->offs[i], it->offs.Len());
+                    //                    printf("--------------%d %d %d\n", ii.index, it->offs[i], it->offs.Len());
                     indexes.push_back(ii);
                 }
             }
@@ -152,16 +159,62 @@ public:
         return 1;
     }
 
+    void replaceAll(std::string &str, const std::string &from, const std::string &to) {
+        if (from.empty())
+            return;
+        size_t start_pos = 0;
+        while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
+            str.replace(start_pos, from.length(), to);
+            start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
+        }
+    }
+
+    std::pair<std::string, bool> queryRewrite(std::string input) {
+        std::string result;
+        result.reserve(input.size() * 2);
+
+        replaceAll(input, "&middot;", "·");
+        replaceAll(input, "&amp;", "&");
+        replaceAll(input, "&shy;", "");
+        replaceAll(input, "&gt;", ">");
+        replaceAll(input, "&lt;", "<");
+
+        bool is_all = true; // 全是汉字，需要判断is substring
+        const char *q = input.data();
+        while (*q) {
+            auto r = pinyins.Get(q);
+
+            if (r.first != NULL) {
+                // std::cout << r.first << std::endl;
+                result.append(r.first);
+            } else if (r.second == 1) {
+                is_all = false;
+                if (!std::isspace(*q) && *q != '\'') {
+                    result.push_back(std::tolower(*q));
+                }
+            } else {
+                is_all = false;
+                result.append(q, r.second);
+            }
+            q += r.second;
+        }
+        return std::make_pair(result, is_all);
+    }
+
     void Search(const AcReq &req, AcResult &resp) {
         ByAlphabet by(this->data);
-        const std::string &q = req.q;
+        auto rewrite = this->queryRewrite(req.q);
+        // auto q = req.q;
+        auto q = rewrite.first;
         auto low = std::lower_bound(indexes.begin(), indexes.end(), q.data(), by);
         auto hi = std::lower_bound(indexes.begin(), indexes.end(), one_greater(q).data(), by);
+
+        // std::cout << req.q << "\t" << q << "\t" << rewrite.second<< std::endl;
 
         bool fast = hi - low > 50000;
         int how_many = req.limit + req.offset;
         if (fast) {
-            how_many = how_many * 2 + 100;
+            how_many = how_many * 2 + 150;
         }
 
         hit_queue<AcIndexItem> pq(how_many);
@@ -174,8 +227,12 @@ public:
                 if (!unique.insert(data.Get(it->data))) {
                     continue; // duplicate
                 }
-                // TODO check substr if needed
             }
+
+            if (rewrite.second && strstr(data.Get(it->data), req.q.data()) == NULL) {
+                continue;
+            }
+
             total_hits += 1;
             pq.UpdateTop(*it);
         }
@@ -184,19 +241,20 @@ public:
             how_many = total_hits;
         }
 
-        printf("total hits %d, fast: %d, how_many: %d\n", total_hits, fast, how_many);
 
         AcIndexItem tmp[how_many];
         for (int i = how_many - 1; i >= 0; i--) {
             tmp[i] = pq.Pop();
         }
+        printf("total hits %d, fast: %d, how_many: %d\n", total_hits, fast, how_many);
         int skip = 0;
         for (int i = 0; i < how_many; i++) {
             auto it = tmp[i];
             if (fast && !unique.insert(data.Get(it.data))) {
-//                printf("------------------\n");
+                //                printf("------------------\n");
                 continue; // remove duplicate
             }
+
             skip += 1;
             if (req.offset >= skip) {
                 continue;

@@ -1,3 +1,6 @@
+#ifndef _HASH_SET_H_
+#define _HASH_SET_H_
+
 class IndexStr {
 private:
     char const *mPtr;
@@ -145,3 +148,6 @@ private:
 };
 
 #undef JUMP_
+
+
+#endif /* _HASH_SET_H_ */
