@@ -20,8 +20,8 @@
 
 class Buffer {
     char *p;
-    int end;
     int off;
+    int end;
 public:
     Buffer(char *p, int off, int len) : p(p), off(off), end(len + off) {
     }
@@ -29,9 +29,9 @@ public:
     Buffer() {
     }
 
-    char Char() {
+    int Char() {
         assert(end - off >= 1);
-        return p[off++];
+        return ((unsigned char *) p)[off++];
     }
 
     int Copy(Buffer b) {

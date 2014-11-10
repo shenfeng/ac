@@ -7,8 +7,11 @@
 #include <algorithm>
 #include "string.h"
 #include "hit_queue.h"
-//#include <libgen.h> // basename
 #include "hash_set.hpp"
+#include <sys/time.h>           // gettimeofday
+#include <dirent.h>
+#include "unordered_map"
+#include "logger.hpp"
 
 struct AcIndexItem {
     int index;
@@ -25,32 +28,53 @@ public:
 };
 
 struct Item {
-    char *data;
-    float score;
+    const std::string data;
+    const float score;
+    std::string highlighted;
+
+    Item(const char *data, float score) : data(data), score(score) {
+    }
 };
 
 struct AcResult {
     size_t hits;
     std::vector<Item> items;
+
+    AcResult() : hits(0) {
+    }
 };
 
-struct AcReq {
+struct AcRequest {
     const std::string q;
-    const int limit;
-    const int offset;
+    const size_t limit;
+    const size_t offset;
+    const bool highlight;
 
-    AcReq(std::string q, int limit, int offset) : q(q), limit(limit), offset(offset) {
+    AcRequest(const std::string q, size_t limit, size_t offset, bool highlight) :
+            q(q), limit(limit), offset(offset), highlight(highlight) {
     }
 };
 
-static const char *base_name(const char *file) {
-    const char *p = strrchr(file, '/');
-    if (p == NULL) {
-        return file;
-    } else {
-        return p + 1;
+class Watch {
+private:
+    double last;
+
+    double milliTime() {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        return tv.tv_sec + tv.tv_usec / 1000.0 / 1000;
     }
-}
+
+public:
+    Watch() {
+        last = this->milliTime();
+    }
+
+    double Tick() {
+        return this->milliTime() - this->last;
+    }
+};
+
 
 struct ByAlphabet {
 private:
@@ -78,86 +102,14 @@ public:
     }
 };
 
-static std::string one_greater(const std::string &str) { // copy
-    std::string cq = str;
-    // one more bigger
-    for (auto it = cq.rbegin(); it != cq.rend(); ++it) {
-        if (*it != (char) 255) {
-            *it += 1;
-            break;
-        }
-    }
-    return cq;
-}
 
 class AcIndex {
     std::string name;
     Buffer data;
     std::vector<AcIndexItem> indexes;
     const Pinyins &pinyins;
-public:
-    AcIndex(const Pinyins &pinyins) : pinyins(pinyins) {
-    }
 
-    int Open(std::string path) {
-        ItemReader ir;
-        int n = ir.Open(path);
-        if (n <= 0) {
-            return n;
-        }
-
-        int ram = 0, items = 0;
-        while (ir.Hasremaing()) {
-            AcItem ai = ir.Next();
-            ram += ai.show.Len() + 1;
-            for (auto it = ai.indexes.begin(); it != ai.indexes.end(); ++it) {
-                ram += it->index.Len() + 1;
-                items += 1 + it->offs.Len();
-                if (it->check.Len() > 0) {
-                    ram += it->check.Len() + 1;
-                }
-            }
-        }
-
-        this->data = Buffer((char *) malloc(ram), 0, ram);
-        this->indexes.reserve(items);
-        this->name = base_name(path.data());
-
-        if (ram > 1024 * 1024) {
-            printf("load %d items, %.2fm RAM, from %s\n", items,
-                    (items * sizeof(AcIndexItem) + ram) / 1024.0 / 1024,
-                    this->name.c_str());
-        }
-
-        ir.Reset();
-        while (ir.Hasremaing()) {
-            AcItem ai = ir.Next();
-
-            AcIndexItem ii;
-            ii.data = data.Copy(ai.show);
-            for (auto it = ai.indexes.begin(); it != ai.indexes.end(); ++it) {
-                ii.index = data.Copy(it->index);
-                ii.show = ii.data;
-                if (it->check.Hasremaing()) {
-                    ii.show = data.Copy(it->check);
-                }
-                ii.score = it->score;
-                indexes.push_back(ii);
-
-                int idx = ii.index;
-                for (int i = 0; i < it->offs.Len(); i++) {
-                    ii.score *= 0.95;
-                    ii.index = idx + it->offs[i];
-                    //                    printf("--------------%d %d %d\n", ii.index, it->offs[i], it->offs.Len());
-                    indexes.push_back(ii);
-                }
-            }
-        }
-
-        ir.Close();
-        std::sort(indexes.begin(), indexes.end(), ByAlphabet(this->data));
-        return 1;
-    }
+    std::string highlight(const std::string &origin, const std::string &query);
 
     void replaceAll(std::string &str, const std::string &from, const std::string &to) {
         if (from.empty())
@@ -183,9 +135,7 @@ public:
         const char *q = input.data();
         while (*q) {
             auto r = pinyins.Get(q);
-
             if (r.first != NULL) {
-                // std::cout << r.first << std::endl;
                 result.append(r.first);
             } else if (r.second == 1) {
                 is_all = false;
@@ -201,78 +151,18 @@ public:
         return std::make_pair(result, is_all);
     }
 
-    void Search(const AcReq &req, AcResult &resp) {
-        ByAlphabet by(this->data);
-        auto rewrite = this->queryRewrite(req.q);
-        // auto q = req.q;
-        auto q = rewrite.first;
-        auto low = std::lower_bound(indexes.begin(), indexes.end(), q.data(), by);
-        auto hi = std::lower_bound(indexes.begin(), indexes.end(), one_greater(q).data(), by);
-
-        // std::cout << req.q << "\t" << q << "\t" << rewrite.second<< std::endl;
-
-        bool fast = hi - low > 50000;
-        int how_many = req.limit + req.offset;
-        if (fast) {
-            how_many = how_many * 2 + 150;
-        }
-
-        hit_queue<AcIndexItem> pq(how_many);
-        // fast: check result; non-fast: check every element
-        dense_hash_set<IndexStr> unique(fast ? how_many : hi - low);
-        size_t total_hits = 0;
-
-        for (auto it = low; it != hi; it++) {
-            if (!fast) {
-                if (!unique.insert(data.Get(it->data))) {
-                    continue; // duplicate
-                }
-            }
-
-            if (rewrite.second && strstr(data.Get(it->data), req.q.data()) == NULL) {
-                continue;
-            }
-
-            total_hits += 1;
-            pq.UpdateTop(*it);
-        }
-        pq.PopSentinel(total_hits);
-        if (how_many > total_hits) {
-            how_many = total_hits;
-        }
-
-
-        AcIndexItem tmp[how_many];
-        for (int i = how_many - 1; i >= 0; i--) {
-            tmp[i] = pq.Pop();
-        }
-        printf("total hits %d, fast: %d, how_many: %d\n", total_hits, fast, how_many);
-        int skip = 0;
-        for (int i = 0; i < how_many; i++) {
-            auto it = tmp[i];
-            if (fast && !unique.insert(data.Get(it.data))) {
-                //                printf("------------------\n");
-                continue; // remove duplicate
-            }
-
-            skip += 1;
-            if (req.offset >= skip) {
-                continue;
-            }
-
-            Item item;
-            item.score = it.score;
-            item.data = this->data.Get(it.data);
-            resp.items.push_back(item);
-
-            printf("%s\t%s\t%f\t%s\n",
-                    data.Get(it.data), data.Get(it.index), it.score, data.Get(it.show));
-
-            if (resp.items.size() >= req.limit) {
-                break;
-            }
-        }
+public:
+    AcIndex(const Pinyins &pinyins) : pinyins(pinyins) {
     }
+
+    std::string GetName() {
+        return this->name;
+    }
+
+    int Open(std::string path);
+
+    void Search(const AcRequest &req, AcResult &resp);
 };
+
 
 #endif /* _ACINDEX_H_ */

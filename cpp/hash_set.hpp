@@ -124,7 +124,6 @@ public:
 private:
     size_type min_buckets(size_type v) { // expected
         v = int(1.3 * v);
-//        printf("input: %d\n", v);
         v--;
         v |= v >> 1;
         v |= v >> 2;
@@ -133,12 +132,7 @@ private:
         v |= v >> 16;
         v++;
         return v;
-
-//        printf("input: %d\n", v);
-//        double the value: 3 => 4 => 8
-//        return v * 2;
     }
-
 
     // Copy Constructor
     dense_hash_set(const dense_hash_set &other) = delete;

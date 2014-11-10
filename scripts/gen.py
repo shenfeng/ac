@@ -78,6 +78,8 @@ if __name__ == '__main__':
     # print '\t'.join(seg.max_cut_for_ac(TRIE, u"展高电子"))
 
     gen_company_data('company', '../data/company_tiny', limit=200000)
+    gen_company_data('company', '../data/company')
+#    gen_company_data('company', '../data/company_large', limit=550000)
 
 
 # 展高电子|103584	zgdz	5225.000000
