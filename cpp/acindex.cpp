@@ -208,8 +208,8 @@ void AcIndex::Search(const AcRequest &req, AcResult &resp) {
         tmp[i] = pq.Pop();
     }
     // printf("total hits %ld, fast: %d, how_many: %d\n", total_hits, fast, how_many);
-    int skip = 0;
-    for (int i = 0; i < how_many; i++) {
+    size_t skip = 0;
+    for (size_t i = 0; i < how_many; i++) {
         auto it = tmp[i];
         if (fast && !unique.insert(data.Get(it.data))) {
             continue; // remove duplicate
@@ -219,11 +219,12 @@ void AcIndex::Search(const AcRequest &req, AcResult &resp) {
         if (req.offset >= skip) {
             continue;
         }
-        Item item(this->data.Get(it.data), it.score);
-        if (req.highlight) {
-            item.highlighted = this->highlight(item.data, q);
-        }
-        resp.items.push_back(item);
+        // Item item();
+        // if (req.highlight) {
+        // item.highlighted = ;
+        // }
+        auto data = this->data.Get(it.data);
+        resp.items.emplace_back(data, it.score, this->highlight(data, q));
         if (resp.items.size() >= req.limit) {
             break;
         }

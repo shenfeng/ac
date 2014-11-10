@@ -1,4 +1,5 @@
 .idea
 ac.iml
-cpp/Debug
-cpp/Release
+cpp/debug
+cpp/release
+cpp/gen-cpp

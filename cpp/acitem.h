@@ -26,7 +26,7 @@ public:
     Buffer(char *p, int off, int len) : p(p), off(off), end(len + off) {
     }
 
-    Buffer() {
+    Buffer() : p(NULL), off(0), end(0) {
     }
 
     int Char() {
@@ -106,6 +106,9 @@ private:
     char *p;
     Buffer buffer;
 public:
+    ItemReader() : size(0), p(NULL) {
+    }
+
     int Open(std::string path) {
         int fd = open(path.c_str(), O_RDONLY);
         if (fd < 0) {

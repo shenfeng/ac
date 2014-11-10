@@ -28,11 +28,12 @@ public:
 };
 
 struct Item {
-    const std::string data;
-    const float score;
+    std::string data;
+    float score;
     std::string highlighted;
 
-    Item(const char *data, float score) : data(data), score(score) {
+    Item(const char *data, float score, const std::string &h) :
+            data(data), score(score), highlighted(h) {
     }
 };
 
@@ -48,10 +49,10 @@ struct AcRequest {
     const std::string q;
     const size_t limit;
     const size_t offset;
-    const bool highlight;
+    // const bool highlight;
 
-    AcRequest(const std::string q, size_t limit, size_t offset, bool highlight) :
-            q(q), limit(limit), offset(offset), highlight(highlight) {
+    AcRequest(const std::string q, size_t limit, size_t offset) :
+            q(q), limit(limit), offset(offset) {
     }
 };
 

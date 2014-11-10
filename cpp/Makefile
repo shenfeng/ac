@@ -1,31 +1,16 @@
-GEN_SRC := server.cpp gen-cpp/AutoComplete.cpp gen-cpp/api_types.cpp logger.cpp
-GEN_OBJ := $(patsubst %.cpp,%.o, $(GEN_SRC))
-
-INCLUDE =-I gen-cpp -I /usr/include/thrift -I /usr/local/include/thrift/
-CPPFLAGS   = -Wall -pedantic -O3 -c -std=c++0x -DNDEBUG
-
+.PHONY: debug release clean
 
 gen: api.thrift
 	rm -rf gen-cpp
 	thrift -gen cpp api.thrift
-  # rm gen-cpp/AutoComplete_server.skeleton.cpp
 
-share:
-	g++ -c -fPIC lib_ac.cpp -o libac.o -std=c++0x
-	g++ -shared -Wl -o libac.so libac.o
-	rm libac.o
+debug:
+	mkdir -p debug && cd debug && cmake -DCMAKE_BUILD_TYPE=Debug .. && make -j
 
-# INC := -I$(THRIFT_DIR) -I$(BOOST_DIR)
+release:
+	mkdir -p release && cd release && cmake -DCMAKE_BUILD_TYPE=Release .. && make -j
 
-.PHONY: all clean
-
-all: ac_server
-
-%.o: %.cpp
-	$(CXX) $(CPPFLAGS) -c $< -o $@ ${INCLUDE}
-
-ac_server: $(GEN_OBJ)
-	$(CXX) $^ -o $@ -L/usr/local/lib -lthrift -lboost_program_options -lpthread
+all: clean gen debug release
 
 clean:
-	$(RM) *.o ac_server
+	$(RM) -r release debug gen-cpp

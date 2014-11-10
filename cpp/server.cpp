@@ -49,12 +49,12 @@ private:
 public:
     void autocomplete(AcResp &_return, const AcReq &req) {
         auto it = indexes.find(req.kind);
-        if(it != indexes.end()) {
-            AcRequest q(req.q, req.limit, req.offset, req.highlight);
+        if (it != indexes.end()) {
+            AcRequest q(req.q, req.limit, req.offset);
             AcResult r;
             it->second->Search(q, r);
             _return.total = r.hits;
-            for(auto it = r.items.begin(); it != r.items.end(); it++) {
+            for (auto it = r.items.begin(); it != r.items.end(); it++) {
                 AcRespItem item;
                 item.item = it->data;
                 item.score = it->score;
@@ -65,8 +65,8 @@ public:
     }
 
     void acnames(std::vector<std::string> &_return) {
-        for(auto it = indexes.cbegin(); it != indexes.cend(); ++it) {
-             _return.push_back(it->first);
+        for (auto it = indexes.cbegin(); it != indexes.cend(); ++it) {
+            _return.push_back(it->first);
         }
     }
 };
