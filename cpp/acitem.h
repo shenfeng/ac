@@ -128,6 +128,7 @@ public:
             perror(path.c_str());
             return -1;
         }
+        close(fd);
 
         this->buffer = Buffer(this->p, 0, this->size);
         return 1;

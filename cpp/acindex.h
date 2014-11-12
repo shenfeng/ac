@@ -15,8 +15,8 @@
 
 struct AcIndexItem {
     int index;
-    int data;
-    int show;
+    int data;                   // check
+    int show;                   // return to client
     float score;
 public:
     AcIndexItem() : index(0), data(0), show(0), score(0) {
@@ -24,6 +24,10 @@ public:
 
     bool operator<(const AcIndexItem &rhs) const {
         return this->score < rhs.score;
+    }
+
+    int key() const {
+        return this->show;
     }
 };
 
@@ -63,7 +67,7 @@ private:
     double milliTime() {
         struct timeval tv;
         gettimeofday(&tv, NULL);
-        return tv.tv_sec + tv.tv_usec / 1000.0 / 1000;
+        return tv.tv_sec * 1000 + tv.tv_usec / 1000.0;
     }
 
 public:

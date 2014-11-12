@@ -109,6 +109,7 @@ std::string AcIndex::highlight(const std::string &origin, const std::string &que
 }
 
 int AcIndex::Open(std::string path) {
+    Watch watch;
     ItemReader ir;
     int n = ir.Open(path);
     if (n <= 0) {
@@ -131,11 +132,6 @@ int AcIndex::Open(std::string path) {
     this->data = Buffer((char *) malloc(ram), 0, ram);
     this->indexes.reserve(items);
     this->name = base_name(path.data());
-
-    if (ram > 1024 * 1024) {
-        log_info("load %d items, %.2fm RAM, from %s",
-                items, (items * sizeof(AcIndexItem) + ram) / 1024.0 / 1024, this->name.c_str());
-    }
 
     ir.Reset();
     while (ir.Hasremaing()) {
@@ -163,6 +159,12 @@ int AcIndex::Open(std::string path) {
 
     ir.Close();
     std::sort(indexes.begin(), indexes.end(), ByAlphabet(this->data));
+
+    if (ram > 1024 * 1024) {
+        log_info("%s, %d items, %.2fm RAM, in %.1fms",
+                this->name.c_str(), items, (items * sizeof(AcIndexItem) + ram) / 1024.0 / 1024, watch.Tick());
+    }
+
     return 1;
 }
 
@@ -172,11 +174,17 @@ void AcIndex::Search(const AcRequest &req, AcResult &resp) {
     auto rewrite = this->queryRewrite(req.q);
     // auto q = req.q;
     auto q = rewrite.first;
-    auto low = std::lower_bound(indexes.begin(), indexes.end(), q.data(), by);
-    auto hi = std::lower_bound(indexes.begin(), indexes.end(), one_greater(q).data(), by);
+    auto low = indexes.begin(), hi = indexes.end();
+    bool check = rewrite.second;
 
-    bool fast = hi - low > 50000, check = rewrite.second;
+    if (q.size() > 0) {
+        low = std::lower_bound(indexes.begin(), indexes.end(), q.data(), by);
+        hi = std::lower_bound(indexes.begin(), indexes.end(), one_greater(q).data(), by);
+    } else {
+        check = false;
+    }
 
+    bool fast = hi - low > 50000;
     size_t how_many = req.limit + req.offset;
     if (fast) {
         how_many = how_many * 2 + 150;
@@ -187,6 +195,10 @@ void AcIndex::Search(const AcRequest &req, AcResult &resp) {
     dense_hash_set<IndexStr> unique(fast ? how_many : hi - low);
 
     for (auto it = low; it != hi; it++) {
+        if(pq.Replace(*it)) {   // save value, but with a higher score
+            continue;
+        }
+
         if (!fast && !unique.insert(data.Get(it->data))) {
             continue; // duplicate
         }
@@ -230,6 +242,8 @@ void AcIndex::Search(const AcRequest &req, AcResult &resp) {
         }
     }
 
-    log_info("%s %s => f%d/c%d/%s, hit %d/%d, %.2fms",
-            name.data(), req.q.data(), fast, check, q.data(), resp.hits, hi - low, watch.Tick());
+    log_info("%s %d/%d %s=>f%d/c%d/%s, hit %d/%d, %.1fms", name.data(), req.limit, req.offset,
+             req.q.data(), fast, check, q.data(),
+             resp.hits, hi - low,
+             watch.Tick());
 }

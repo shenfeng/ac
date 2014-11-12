@@ -4,7 +4,8 @@ using namespace std;
 
 // namespace logger {
 
-__thread char* Logger::thread_name_(NULL);
+//__thread char* Logger::thread_name_(NULL);
+__thread int Logger::thread_id_(0);
 static Logger g_logger; // static global logger
 
 void Logger::Logv(int level, const char *fmt, va_list ap) {
@@ -25,15 +26,25 @@ void Logger::Logv(int level, const char *fmt, va_list ap) {
     const char levels[] = "TDIWEF"; // trace, debug, info, warn, error, fatal
     {
         std::lock_guard<std::mutex> _(mutex_);
-        if (thread_name_) {
-            fprintf(logfile_, "%s %c [%s] %s\n", buf, levels[level], thread_name_, msg);
-        } else {
-            auto id = std::this_thread::get_id();
-            std::stringstream s;
-            s << id;
-            auto n = s.str();
-            fprintf(logfile_, "%s %c [%s] %s\n", buf, levels[level], n.data(), msg);
+        if(!thread_id_) {
+            thread_id_ = ++this->current_max_id_;
         }
+//        if (!thread_name_) {
+//            char tn[32];
+//            snprintf(tn, sizeof(tn), "t-%d", ++this->thread_id_);
+//            set_thread_name(tn);
+//
+//        }
+        fprintf(logfile_, "%s %c [thread-%d] %s\n", buf, levels[level], thread_id_, msg);
+//        if (thread_name_) {
+//
+//        } else {
+//            auto id = std::this_thread::get_id();
+//            std::stringstream s;
+//            s << id;
+//            auto n = s.str();
+//            fprintf(logfile_, "%s %c [%s] %s\n", buf, levels[level], n.data(), msg);
+//        }
         fflush(logfile_);
     }
 }
@@ -71,7 +82,7 @@ bool log_open(const std::string &filename, int level, int rotateHour) {
 }
 
 int set_log_level(int level) { return g_logger.SetLevel(level); }
-void set_thread_name(const std::string &name) { g_logger.SetThreadName(name); }
+//void set_thread_name(const std::string &name) { g_logger.SetThreadName(name); }
 
 void log_write(int level, const char *fmt, ...) {
     if (!g_logger.Enabled(level)) return;
@@ -113,3 +124,4 @@ int main() {
 }
 
 #endif
+

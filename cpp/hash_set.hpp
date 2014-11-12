@@ -95,19 +95,6 @@ public:
         size_type num_probes = 0;
         size_type bucknum = value.hash_code() & bucket_count_minus_one;
 
-        // // give compiler a chance to unroll the loop
-        // for (int i = 0; i < 3; ++i) {
-        //     const item_t &item = _table[bucknum];
-        //     if (item.is_unset()) {
-        //         _table[bucknum] = value;
-        //         return true;
-        //     } else if (value.equals(item)) {
-        //         return false;
-        //     }
-        //     ++num_probes;
-        //     bucknum = (bucknum + JUMP_(key, num_probes)) & bucket_count_minus_one;
-        // }
-
         while (1) {
             const item_t &item = _table[bucknum];
             if (item.is_unset()) {
@@ -120,6 +107,40 @@ public:
             bucknum = (bucknum + JUMP_(key, num_probes)) & bucket_count_minus_one;
         }
     }
+
+    // bool contains(const item_t &value) {
+    //     const size_type bucket_count_minus_one = _num_buckets - 1;
+    //     size_type num_probes = 0;
+    //     size_type bucknum = value.hash_code() & bucket_count_minus_one;
+
+    //     while (1) {
+    //         const item_t &item = _table[bucknum];
+    //         if (item.is_unset()) {
+    //             return false;
+    //         } else if (value.equals(item)) {
+    //             return true;
+    //         }
+    //         ++num_probes;
+    //         bucknum = (bucknum + JUMP_(key, num_probes)) & bucket_count_minus_one;
+    //     }
+    // }
+
+    // void remove(const item_t &value) {
+    //     const size_type bucket_count_minus_one = _num_buckets - 1;
+    //     size_type num_probes = 0;
+    //     size_type bucknum = value.hash_code() & bucket_count_minus_one;
+
+    //     while (1) {
+    //         const item_t &item = _table[bucknum];
+    //         if (item.is_unset()) {
+    //             return;
+    //         } else if (value.equals(item)) {
+    //             _table[bucknum] = item_t();
+    //         }
+    //         ++num_probes;
+    //         bucknum = (bucknum + JUMP_(key, num_probes)) & bucket_count_minus_one;
+    //     }
+    // }
 
 private:
     size_type min_buckets(size_type v) { // expected

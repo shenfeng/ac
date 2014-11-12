@@ -131,9 +131,9 @@ public:
     }
 
     int operator()() {
-        char buffer[64];
-        snprintf(buffer, sizeof(buffer), "worker-%d", mJobId);
-        set_thread_name(buffer);
+//        char buffer[64];
+//        snprintf(buffer, sizeof(buffer), "worker-%d", mJobId);
+//        set_thread_name(buffer);
         int count = 0;
         while (1) {
             auto p = mList.pop_back();
@@ -143,7 +143,6 @@ public:
                 if (index->Open(confs.data_dir + "/" + p.first) >= 0) {
                     lock_guard<mutex> _(mMutex);
                     indexes[index->GetName()] = index;
-                    // indexes.Add(index);
                 }
             } else {
                 break;
@@ -187,7 +186,7 @@ void parse_args(char **argv, int argc) {
         std::cout << desc << "\n";
         exit(1);
     }
-    set_thread_name("main");
+//    set_thread_name("main");
     log_open(logfile, conf.verbosity, 24);
     log_info("log to file: %s, verbosity: %d", logfile.data(), conf.verbosity);
 }

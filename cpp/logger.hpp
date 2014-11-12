@@ -18,7 +18,7 @@ public:
     enum { kLevelTrace, kLevelDebug, kLevelInfo, kLevelWarn, kLevelError, kLevelFatal };
 
     // default log to stdout
-    Logger(): level_(kLevelInfo), next_rotate_mill_(0), logfile_(stdout) {}
+    Logger(): level_(kLevelInfo), next_rotate_mill_(0), logfile_(stdout), current_max_id_(0) {}
     ~Logger() { std::lock_guard<std::mutex> _(mutex_); this->Close(); }
 
     // Open a logger, filename can be "stdout". rotate every rotateHour
@@ -26,11 +26,11 @@ public:
 
     // set thread name, like log4j, can logout thead name
     // if not set for current thread, use std::this_thread::get_id()
-    void SetThreadName(const std::string &name) {
-        char* _name = (char *)malloc(name.size() + 1);
-        strcpy(_name, name.data());
-        thread_name_ = _name;
-    }
+//    void SetThreadName(const std::string &name) {
+//        char* _name = (char *)malloc(name.size() + 1);
+//        strcpy(_name, name.data());
+//        thread_name_ = _name;
+//    }
 
     bool Enabled(int level) { return level >= level_; }
     void Logv (int level, const char* fmt, va_list ap);
@@ -55,11 +55,15 @@ private:
     FILE *logfile_;
     std::mutex mutex_;
     std::string filename_;
+
+    int current_max_id_;
+    static __thread int thread_id_;
+
     // manage the memory. No free get called
-    static __thread char* thread_name_; // thread local. take ownership of the memory
+//    static __thread char* thread_name_; // thread local. take ownership of the memory
 
     inline long MilliTime(struct timeval const *now) {
-        return now->tv_sec + now->tv_usec/1000.0/1000;
+        return now->tv_sec * 1000 + now->tv_usec/1000;
     }
 
     // prerequisite: mutex held
@@ -75,7 +79,7 @@ private:
             std::lock_guard<std::mutex> _(mutex_);
             this->Close();
             char buf[64];
-            strftime(buf,sizeof(buf),"_%F_%H",localtime(&(now->tv_sec)));
+            strftime(buf,sizeof(buf),"_%F",localtime(&(now->tv_sec)));
             auto filename = filename_ + buf;
             logfile_ = fopen(filename.data(), "a");
             next_rotate_mill_ = this->MilliTime(now) + rotate_hour_ * 60 * 60 * 1000;
@@ -92,6 +96,8 @@ bool log_open(const std::string &filename, int level=Logger::kLevelInfo, int rot
 int set_log_level(int level);
 void set_thread_name(const std::string &name);
 
+#define __FILE_NAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+
 /*
   sample:
   2014-01-04 19:43:49.888 E [main] util/log.cpp(81): hello world
@@ -101,17 +107,18 @@ void set_thread_name(const std::string &name);
 */
 
 #define log_trace(fmt, ...)                                             \
-    log_write(Logger::kLevelTrace, "%s(%d): " fmt, __FILE__, __LINE__, __VA_ARGS__)
+    log_write(Logger::kLevelTrace, "%s(%d): " fmt, __FILE_NAME, __LINE__, __VA_ARGS__)
 #define log_debug(fmt, ...)                                             \
-    log_write(Logger::kLevelDebug, "%s(%d): " fmt, __FILE__, __LINE__, __VA_ARGS__)
+    log_write(Logger::kLevelDebug, "%s(%d): " fmt, __FILE_NAME, __LINE__, __VA_ARGS__)
 #define log_info(fmt, ...)                                              \
-    log_write(Logger::kLevelInfo,  "%s(%d): " fmt, __FILE__, __LINE__, __VA_ARGS__)
+    log_write(Logger::kLevelInfo,  "%s(%d): " fmt, __FILE_NAME, __LINE__, __VA_ARGS__)
 #define log_warn(fmt, ...)                                              \
-    log_write(Logger::kLevelWarn,  "%s(%d): " fmt, __FILE__, __LINE__, __VA_ARGS__)
+    log_write(Logger::kLevelWarn,  "%s(%d): " fmt, __FILE_NAME, __LINE__, __VA_ARGS__)
 #define log_error(fmt, ...)                                             \
-    log_write(Logger::kLevelError, "%s(%d): " fmt, __FILE__, __LINE__, __VA_ARGS__)
+    log_write(Logger::kLevelError, "%s(%d): " fmt, __FILE_NAME, __LINE__, __VA_ARGS__)
 #define log_fatal(fmt, ...)                                             \
-    log_write(Logger::kLevelFatal, "%s(%d): " fmt, __FILE__, __LINE__, __VA_ARGS__)
+    log_write(Logger::kLevelFatal, "%s(%d): " fmt, __FILE_NAME, __LINE__, __VA_ARGS__)
+
 // } // namespace pedis
 
 #endif /* _PEDIS_UTIL_LOG_H */
