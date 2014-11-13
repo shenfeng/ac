@@ -1,14 +1,16 @@
 #ifndef _HIT_QUEUE_H_
 #define _HIT_QUEUE_H_
 
-#include <unordered_set>
+#include "hash_set.hpp"
 
 template<class T>
 class hit_queue { // a min heap
 public:
     typedef T item_t;
 
-    hit_queue(int size) : size(size), keys(size*2) {
+    // since size is relative small
+    // we can give more space to dense_int_set
+    hit_queue(int size) : size(size), keys(size * 4) {
         heap = new item_t[size + 1]; // heap[0] is not used
     }
 
@@ -18,29 +20,33 @@ public:
             keys.insert(t.key());
 
             this->heap[1] = t;
-            this->downHeap();
+            this->downHeap(1);
         }
+        // printf("%.2f\n", t.score);
+        // print_heap();
     }
 
     bool Replace(const item_t &t) {
-        if (keys.find(t.key()) == keys.end()) {
+        if (!keys.contains(t.key())) {
             return false;
         }
-        for(int i = 0; i<=size; i++) {
+        for (int i = 0; i <= size; i++) {
             if (heap[i].key() == t.key()) {
                 if (heap[i] < t) {
-                    heap[i] = heap[1];
-                    heap[1] = t;
-                    this->downHeap();
+                    // printf("--replace-- %d, from %.2f, to %.2f\n", i, heap[i].score, t.score);
+                    heap[i] = t;
+                    this->downHeap(i);
+                    // print_heap();
                 }
-                break;
+                return true;
             }
         }
-        return true;
+        assert(0 && "ERROR, hashtable says it contains, but actually, it does not");
+        return false;
     }
 
-    void downHeap() {
-        int root = 1;
+    void downHeap(int root) {
+        // int root = 1;
         int left = root * 2;
         int right = left + 1;
         for (; left <= this->size;) {
@@ -54,9 +60,7 @@ public:
             }
 
             if (swap != root) {
-                const T t = heap[swap];
-                heap[swap] = heap[root];
-                heap[root] = t;
+                swap_data(swap, root);
                 root = swap;
                 left = root * 2;
                 right = left + 1;
@@ -70,20 +74,13 @@ public:
         return heap[1];
     }
 
+    // no delete on keys. After pop, No insert is done
     T Pop() {
         T t = heap[1];
         heap[1] = heap[size];
         this->size -= 1;
-        this->downHeap();
+        this->downHeap(1);
         return t;
-    }
-
-    // pop all the sentinel elements (there are pq.size() - totalHits).
-    void PopSentinel(int real_hits) {
-        int how_many = this->size;
-        for (int i = how_many - real_hits; i > 0; i--) {
-            this->Pop();
-        }
     }
 
     ~hit_queue() {
@@ -93,13 +90,28 @@ public:
 private:
     int size;
     item_t *heap;
-    std::unordered_set<int> keys;
+    // std::unordered_set<int> keys;
+    dense_int_set keys;
 
     // Copy Constructor
     hit_queue(const hit_queue &other) = delete;
 
     // Copy Assignment Operator
     hit_queue &operator=(const hit_queue &other) = delete;
+
+    void swap_data(int i, int j) {
+        const T t = heap[i];
+        heap[i] = heap[j];
+        heap[j] = t;
+    }
+
+    void print_heap() {
+        printf("%d: ", size);
+        for (int i = 1; i <= size; i++) {
+            printf("%d:%7.2f, ", i, heap[i].score);
+        }
+        printf("\n\n");
+    }
 };
 
 #endif /* _HIT_QUEUE_H_ */

@@ -15,11 +15,11 @@
 
 struct AcIndexItem {
     int index;
-    int data;                   // check
+    int check;                   // check
     int show;                   // return to client
     float score;
 public:
-    AcIndexItem() : index(0), data(0), show(0), score(0) {
+    AcIndexItem() : index(0), check(0), show(0), score(-100) {
     }
 
     bool operator<(const AcIndexItem &rhs) const {
@@ -136,6 +136,7 @@ class AcIndex {
         replaceAll(input, "&gt;", ">");
         replaceAll(input, "&lt;", "<");
 
+        
         bool is_all = true; // 全是汉字，需要判断is substring
         const char *q = input.data();
         while (*q) {

@@ -129,7 +129,8 @@ int AcIndex::Open(std::string path) {
         }
     }
 
-    this->data = Buffer((char *) malloc(ram), 0, ram);
+    // skip 4 bytes
+    this->data = Buffer((char *) malloc(ram + 4), 4, ram);
     this->indexes.reserve(items);
     this->name = base_name(path.data());
 
@@ -138,12 +139,12 @@ int AcIndex::Open(std::string path) {
         AcItem ai = ir.Next();
 
         AcIndexItem ii;
-        ii.data = data.Copy(ai.show);
+        ii.show = data.Copy(ai.show);
         for (auto it = ai.indexes.begin(); it != ai.indexes.end(); ++it) {
             ii.index = data.Copy(it->index);
-            ii.show = ii.data;
+            ii.check = ii.show;
             if (it->check.Hasremaing()) {
-                ii.show = data.Copy(it->check);
+                ii.check = data.Copy(it->check);
             }
             ii.score = it->score;
             indexes.push_back(ii);
@@ -195,22 +196,26 @@ void AcIndex::Search(const AcRequest &req, AcResult &resp) {
     dense_hash_set<IndexStr> unique(fast ? how_many : hi - low);
 
     for (auto it = low; it != hi; it++) {
-        if(pq.Replace(*it)) {   // save value, but with a higher score
+        if (pq.Replace(*it)) {   // save value, but with a higher score
             continue;
         }
 
-        if (!fast && !unique.insert(data.Get(it->data))) {
+        if (!fast && !unique.insert(data.Get(it->show))) {
             continue; // duplicate
         }
 
-        if (check && strstr(data.Get(it->data), req.q.data()) == NULL) {
+        if (check && strstr(data.Get(it->check), req.q.data()) == NULL) {
             continue;
         }
         resp.hits += 1;
         pq.UpdateTop(*it);
     }
 
-    pq.PopSentinel(resp.hits);
+    // pop all the sentinel elements (there are pq.size() - totalHits).
+    for (int i = how_many - resp.hits; i > 0; i--) {
+        pq.Pop();
+    }
+
     if (how_many > resp.hits) {
         how_many = resp.hits;
     }
@@ -223,7 +228,8 @@ void AcIndex::Search(const AcRequest &req, AcResult &resp) {
     size_t skip = 0;
     for (size_t i = 0; i < how_many; i++) {
         auto it = tmp[i];
-        if (fast && !unique.insert(data.Get(it.data))) {
+        // printf("%s %d %f\n", data.Get(it.show), it.show, it.score);
+        if (fast && !unique.insert(data.Get(it.show))) {
             continue; // remove duplicate
         }
 
@@ -231,19 +237,17 @@ void AcIndex::Search(const AcRequest &req, AcResult &resp) {
         if (req.offset >= skip) {
             continue;
         }
-        // Item item();
-        // if (req.highlight) {
-        // item.highlighted = ;
-        // }
-        auto data = this->data.Get(it.data);
+
+        auto data = this->data.Get(it.show);
         resp.items.emplace_back(data, it.score, this->highlight(data, q));
         if (resp.items.size() >= req.limit) {
             break;
         }
     }
 
-    log_info("%s %d/%d %s=>f%d/c%d/%s, hit %d/%d, %.1fms", name.data(), req.limit, req.offset,
-             req.q.data(), fast, check, q.data(),
-             resp.hits, hi - low,
-             watch.Tick());
+    log_info("%s %d/%d %s=>f%d/c%d/%s, hit %d/%d/%d, %.1fms",
+            name.data(), req.limit, req.offset,
+            req.q.data(), fast, check, q.data(),
+            how_many, resp.hits, hi - low,
+            watch.Tick());
 }

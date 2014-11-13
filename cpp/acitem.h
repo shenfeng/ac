@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <fstream>
 #include "utf8/checked.h"
+#include "logger.hpp"
 
 class Buffer {
     char *p;
@@ -131,6 +132,11 @@ public:
         close(fd);
 
         this->buffer = Buffer(this->p, 0, this->size);
+        int magic = this->buffer.Int();
+        if (1987 != magic) {
+            log_fatal("Expect magic number 1987, get %d", magic);
+            return -1;
+        }
         return 1;
     }
 
@@ -161,6 +167,7 @@ public:
 
     void Reset() {
         this->buffer = Buffer(this->p, 0, this->size);
+        this->buffer.Int();
     }
 };
 

@@ -187,7 +187,7 @@ void parse_args(char **argv, int argc) {
         exit(1);
     }
 //    set_thread_name("main");
-    log_open(logfile, conf.verbosity, 24);
+    log_open(logfile, conf.verbosity, 0);
     log_info("log to file: %s, verbosity: %d", logfile.data(), conf.verbosity);
 }
 
