@@ -161,7 +161,7 @@ public:
     AcIndex(const Pinyins &pinyins) : pinyins(pinyins) {
     }
 
-    std::string GetName() {
+    std::string GetName() const {
         return this->name;
     }
 

@@ -10,7 +10,7 @@ public:
 
     // since size is relative small
     // we can give more space to dense_int_set
-    hit_queue(int size) : size(size), keys(size * 4) {
+    hit_queue(int size) : size(size), keys((size + 100) * 2) {
         heap = new item_t[size + 1]; // heap[0] is not used
     }
 

@@ -58,7 +58,7 @@ public:
     }
 
     char operator[](int i) {
-        assert(end - off >= 1);
+        assert(end - off >= i);
         return p[off + i];
     }
 

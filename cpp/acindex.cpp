@@ -173,7 +173,6 @@ void AcIndex::Search(const AcRequest &req, AcResult &resp) {
     Watch watch;
     ByAlphabet by(this->data);
     auto rewrite = this->queryRewrite(req.q);
-    // auto q = req.q;
     auto q = rewrite.first;
     auto low = indexes.begin(), hi = indexes.end();
     bool check = rewrite.second;
@@ -185,28 +184,21 @@ void AcIndex::Search(const AcRequest &req, AcResult &resp) {
         check = false;
     }
 
-    bool fast = hi - low > 50000;
+    bool accurate = hi - low < 200000;
+    dense_int_set counter(accurate ? hi - low : 10);
     size_t how_many = req.limit + req.offset;
-    if (fast) {
-        how_many = how_many * 2 + 150;
-    }
-
     hit_queue<AcIndexItem> pq(how_many);
-    // fast: check result; non-fast: check every element
-    dense_hash_set<IndexStr> unique(fast ? how_many : hi - low);
 
     for (auto it = low; it != hi; it++) {
         if (pq.Replace(*it)) {   // save value, but with a higher score
             continue;
         }
 
-        if (!fast && !unique.insert(data.Get(it->show))) {
-            continue; // duplicate
-        }
-
         if (check && strstr(data.Get(it->check), req.q.data()) == NULL) {
             continue;
         }
+
+        if (accurate) { counter.insert(it->show); }
         resp.hits += 1;
         pq.UpdateTop(*it);
     }
@@ -228,10 +220,6 @@ void AcIndex::Search(const AcRequest &req, AcResult &resp) {
     size_t skip = 0;
     for (size_t i = 0; i < how_many; i++) {
         auto it = tmp[i];
-        // printf("%s %d %f\n", data.Get(it.show), it.show, it.score);
-        if (fast && !unique.insert(data.Get(it.show))) {
-            continue; // remove duplicate
-        }
 
         skip += 1;
         if (req.offset >= skip) {
@@ -245,9 +233,15 @@ void AcIndex::Search(const AcRequest &req, AcResult &resp) {
         }
     }
 
-    log_info("%s %d/%d %s=>f%d/c%d/%s, hit %d/%d/%d, %.1fms",
+    if (accurate) {
+        resp.hits = counter.size();
+    } else {
+        resp.hits /= 6;         // not accurate, just estimation
+    }
+
+    log_info("%s %d/%d %s=>a%d/c%d/%s, hit %d/%d/%d, %.1fms",
             name.data(), req.limit, req.offset,
-            req.q.data(), fast, check, q.data(),
+            req.q.data(), accurate, check, q.data(),
             how_many, resp.hits, hi - low,
             watch.Tick());
 }
