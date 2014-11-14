@@ -136,7 +136,6 @@ class AcIndex {
         replaceAll(input, "&gt;", ">");
         replaceAll(input, "&lt;", "<");
 
-        
         bool is_all = true; // 全是汉字，需要判断is substring
         const char *q = input.data();
         while (*q) {

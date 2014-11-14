@@ -94,9 +94,8 @@ void start_thrift_server(AutoCompleteHandler &h) {
 
     TThreadPoolServer s(processor, serverTransport, transportFactory, protocolFactory,
             threadManager);
-    log_info("thrift server started, port: %d, threads: %d",
-            confs.port, confs.threads);
-
+//    TNonblockingServer server(processor, protocolFactory, confs.port, threadManager);
+    log_info("thrift server started, port: %d, threads: %d", confs.port, confs.threads);
     s.serve();
 }
 
@@ -158,7 +157,6 @@ void parse_args(char **argv, int argc) {
     namespace po = boost::program_options;
     using boost::program_options::value;
 
-
     auto &conf = confs;
 
     po::options_description desc("Auto complete server, allowed options", 200);
@@ -186,7 +184,6 @@ void parse_args(char **argv, int argc) {
         std::cout << desc << "\n";
         exit(1);
     }
-//    set_thread_name("main");
     log_open(logfile, conf.verbosity, 0);
     log_info("log to file: %s, verbosity: %d", logfile.data(), conf.verbosity);
 }
