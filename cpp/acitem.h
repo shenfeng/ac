@@ -98,7 +98,10 @@ struct IndexItem {
 
 struct AcItem {
     Buffer show;
-    std::vector<IndexItem> indexes;
+    std::vector<IndexItem> &indexes;
+    AcItem(std::vector<IndexItem> &i): indexes(i) {
+        indexes.clear();
+    }
 };
 
 class ItemReader {
@@ -106,6 +109,7 @@ private:
     size_t size;
     char *p;
     Buffer buffer;
+    std::vector<IndexItem> reuse; // reuse. avoid memory allocation
 public:
     ItemReader() : size(0), p(NULL) {
     }
@@ -141,7 +145,7 @@ public:
     }
 
     AcItem Next() {
-        AcItem ai;
+        AcItem ai(reuse);
         ai.show = this->buffer.PrefixRead();
 
         int l = this->buffer.Char();
