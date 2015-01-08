@@ -32,7 +32,7 @@ std::string AcIndex::highlight(const std::string &origin, const std::string &que
     // 诺基亚（Nokia）: 对于（，被忽略掉，但在算汉字 offset时，应该算上
     // int pending = 0;
 
-    while (*o) {
+    while (*o && *o != '|') {
         auto r = pinyins.Get(o);
         auto len = r.second;
         // int len = utf8_length(o);
@@ -108,6 +108,8 @@ std::string AcIndex::highlight(const std::string &origin, const std::string &que
     return origin;
 }
 
+float rand_float() { return 1.0 / ((rand() & 0xfffff) + 100); }
+
 int AcIndex::Open(std::string path) {
     Watch watch;
     ItemReader ir;
@@ -146,7 +148,7 @@ int AcIndex::Open(std::string path) {
             if (it->check.Hasremaing()) {
                 ii.check = data.Copy(it->check);
             }
-            ii.score = it->score;
+            ii.score = it->score + rand_float();
             indexes.push_back(ii);
 
             int idx = ii.index;

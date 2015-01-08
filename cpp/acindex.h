@@ -126,8 +126,40 @@ class AcIndex {
         }
     }
 
-    std::pair<std::string, bool> queryRewrite(std::string input) {
+    // 全角字符->半角字符转换
+    std::string qj2bj(const std::string &input) {
+        char *buffer = new char[input.size() * 2];
+        memset(buffer, 0, input.size() * 2);
+        const char *in = input.data();
+
+        char *out = buffer;
+        while(*in) {
+            // char *p = in;
+            unsigned int code = utf8::next(in, in+4);
+            // 全角对应于ASCII表的可见字符从！开始，偏移值为65281 ！
+            if (code >= 65281
+                // 全角对应于ASCII表的可见字符到～结束，偏移值为65374 ～
+                && code <= 65374) {
+                // ASCII表中除空格外的可见字符与对应的全角字符的相对偏移
+                // 全角半角转换间隔: 65248
+                out = utf8::append(code - 65248, out);
+                // 全角空格的值，它没有遵从与ASCII的相对偏移，必须单独处理
+            } else if ( code == 12288) {
+                *out = ' ';
+                out += 1;
+            } else {
+                out = utf8::append(code, out);
+            }
+        }
+
+        std::string r(buffer);
+        delete []buffer;
+        return r;
+    }
+
+    std::pair<std::string, bool> queryRewrite(const std::string &in) {
         std::string result;
+        std::string input = qj2bj(in);
         result.reserve(input.size() * 2);
 
         replaceAll(input, "&middot;", "·");
@@ -135,6 +167,8 @@ class AcIndex {
         replaceAll(input, "&shy;", "");
         replaceAll(input, "&gt;", ">");
         replaceAll(input, "&lt;", "<");
+        replaceAll(input, " ", " "); // U+2006  &#8198; space
+        // 莱克dian q
 
         bool is_all = true; // 全是汉字，需要判断is substring
         const char *q = input.data();
@@ -144,6 +178,7 @@ class AcIndex {
                 result.append(r.first);
             } else if (r.second == 1) {
                 is_all = false;
+                // remove space and '
                 if (!std::isspace(*q) && *q != '\'') {
                     result.push_back(std::tolower(*q));
                 }
