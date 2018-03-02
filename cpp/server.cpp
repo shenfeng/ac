@@ -50,6 +50,7 @@ public:
     void autocomplete(AcResp &_return, const AcReq &req) {
         auto it = indexes.find(req.kind);
         if (it != indexes.end()) {
+            log_info("kind: %s, q: %s, limit: %d, offset: %d", req.kind.data(), req.q.data(), req.limit, req.offset);
             AcRequest q(req.q, req.limit, req.offset);
             AcResult r;
             it->second->Search(q, r);
@@ -61,6 +62,11 @@ public:
                 item.__set_highlighted(it->highlighted);
                 _return.items.push_back(item);
             }
+        } else {
+            _return.__set_total(0);
+            const std::vector<AcRespItem> val;
+            _return.__set_items(val);
+            log_info("autocomplete, kind: %s, not exits", req.kind.data());
         }
     }
 
@@ -234,3 +240,4 @@ int main(int argc, char **argv) {
     AutoCompleteHandler h;
     start_thrift_server(h);
 }
+

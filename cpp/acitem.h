@@ -70,6 +70,13 @@ public:
         return off < end;
     }
 
+    short Short() {
+        assert(end - off >= 2);
+        short n = *(short *) (p + off);
+        off += 2;
+        return n;
+    }
+
     int Int() {
         assert(end - off >= 4);
         int n = *(int *) (p + off);
@@ -82,6 +89,10 @@ public:
         int b = off;
         off += n;
         return Buffer(p, b, n);
+    }
+
+    Buffer PrefixReadV2() {
+        return this->Next(this->Short());
     }
 
     Buffer PrefixRead() {
@@ -110,8 +121,9 @@ private:
     char *p;
     Buffer buffer;
     std::vector<IndexItem> reuse; // reuse. avoid memory allocation
+    int version;
 public:
-    ItemReader() : size(0), p(NULL) {
+    ItemReader() : size(0), p(NULL), version(1) {
     }
 
     int Open(std::string path) {
@@ -137,7 +149,9 @@ public:
 
         this->buffer = Buffer(this->p, 0, this->size);
         int magic = this->buffer.Int();
-        if (1987 != magic) {
+        if (magic == 2018) {
+            version = 2;
+        } else if (1987 != magic) {
             log_fatal("Expect magic number 1987, get %d", magic);
             return -1;
         }
@@ -146,9 +160,9 @@ public:
 
     AcItem Next() {
         AcItem ai(reuse);
-        ai.show = this->buffer.PrefixRead();
+        ai.show = this->version == 2 ? this->buffer.PrefixReadV2() : this->buffer.PrefixRead();
 
-        int l = this->buffer.Char();
+        int l = this->version == 2 ? this->buffer.Short() : this->buffer.Char();
         for (int i = 0; i < l; i++) {
             IndexItem it;
             it.index = this->buffer.PrefixRead();
